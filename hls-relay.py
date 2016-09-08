@@ -9,11 +9,13 @@ import time
 import re
 import urllib
 import os
+import thread
 from subprocess import check_call, STDOUT
 
 STATE_INIT = "state_init"
 STATE_PARSED_MASTER = "state_parsed_master"
 STATE_MASTER_RELAYED = "state_master_relayed"
+STATE_MEDIA_PLAYLIST_RUNNING = "state_media_playlist_running"
 STATE_MEDIA_PLAYLIST_INIT = "state_media_playlist_init"
 STATE_MEDIA_PLAYLIST_UPDATED = "state_media_playlist_updated"
 STATE_MEDIA_PLAYLIST_RELAYED = "state_media_playlist_relayed"
@@ -38,18 +40,35 @@ class HLSRelay:
             self.state = STATE_MASTER_RELAYED
         elif self.state == STATE_MASTER_RELAYED:
             for p in self.mediaplaylists:
-                if self.mediaPlaylistHasChanged(p):
-                    p['state'] = STATE_MEDIA_PLAYLIST_UPDATED
-                if p['state'] == STATE_MEDIA_PLAYLIST_UPDATED:
-                    # Download and relay
-                    self.downloadAndRelay(p)
-                    # Delete old segments
-                    self.deleteOldSegments(p)
+                thread.start_new_thread(self.mediaPlaylistIteration, (p,))
+            self.state = STATE_MEDIA_PLAYLIST_RUNNING
 
         threading.Timer(5, self.iteration).start()
 
+    def mediaPlaylistIteration(self, p):
+        while True:
+            print(time.ctime() + " %s --- media iteration --- %s" % (p['uri'], p['state']))
+            if p['state'] == STATE_MEDIA_PLAYLIST_INIT:
+                if self.mediaPlaylistHasChanged(p):
+                    p['state'] = STATE_MEDIA_PLAYLIST_UPDATED
+            if p['state'] == STATE_MEDIA_PLAYLIST_RELAYED:
+                if self.mediaPlaylistHasChanged(p):
+                    p['state'] = STATE_MEDIA_PLAYLIST_UPDATED
+            if p['state'] == STATE_MEDIA_PLAYLIST_UPDATED:
+                # Download and relay
+                self.downloadAndRelay(p)
+                # Delete old segments
+                self.deleteOldSegments(p)
+                p['state'] = STATE_MEDIA_PLAYLIST_RELAYED
+            time.sleep(1)
+
     def mediaPlaylistHasChanged(self, playlist):
-        return True
+        mediapl_file, headers = urllib.urlretrieve(playlist['uri'])
+        os.remove(mediapl_file)
+        if headers['ETag'] != playlist['ETag']:
+            playlist['ETag'] = headers['ETag']
+            return True
+        return False
 
     def downloadAndRelayMaster(self):
         masterpl_file, headers = urllib.urlretrieve(self.src)
@@ -66,7 +85,6 @@ class HLSRelay:
                 check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % segment_file, '%s%s' % (self.dest, seg.uri)])
                 playlist['relayedsegments'][seg.uri] = True
                 os.remove(segment_file)
-        playlist['state'] = STATE_MEDIA_PLAYLIST_RELAYED
         check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % mediapl_file, '%s%s' % (self.dest, playlist['filename'])])
         os.remove(mediapl_file)
 
@@ -97,6 +115,7 @@ class HLSRelay:
                 mediaplaylist['base'] = obj.base_uri
                 mediaplaylist['uri'] = obj.base_uri + p.uri
                 mediaplaylist['filename'] = p.uri
+                mediaplaylist['ETag'] = ''
             self.mediaplaylists.append(mediaplaylist)
         self.state = STATE_PARSED_MASTER
 
