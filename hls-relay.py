@@ -57,6 +57,7 @@ class HLSRelay:
 
     def downloadAndRelay(self, playlist):
         obj = m3u8.load(playlist['uri'])
+        playlist['m3u8'] = obj
         print("Download and relay %s" % playlist['uri'])
         mediapl_file, headers = urllib.urlretrieve(playlist['uri'])
         for seg in obj.segments:
@@ -70,7 +71,17 @@ class HLSRelay:
         os.remove(mediapl_file)
 
     def deleteOldSegments(self, playlist):
-        return        
+        if not playlist['m3u8']:
+            playlist['m3u8'] = m3u8.load(playlist['uri'])
+        obj = playlist['m3u8']
+        inplaylist = []
+        for seg in obj.segments:
+            inplaylist.append(seg.uri)
+        for k in playlist['relayedsegments'].keys():
+            if not k in inplaylist:
+                # relayed segment is not in current playlist, can be removed
+                check_call(['curl', '-X', 'DELETE', '%s%s' % (self.dest, k)])
+                del playlist['relayedsegments'][k]  
 
     def parseMaster(self):
         obj = m3u8.load(self.src)
