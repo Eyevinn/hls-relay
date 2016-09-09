@@ -1,3 +1,7 @@
+*.pyc
+hlsrelay/*.pyc
 *.egg-info/
 build/
 dist/
+.coverage
+.cache/

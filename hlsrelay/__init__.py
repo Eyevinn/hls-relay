@@ -22,6 +22,15 @@ STATE_MEDIA_PLAYLIST_RELAYED = "state_media_playlist_relayed"
 
 class HLSRelay:
     def __init__(self, src, dest):
+        if not re.match('.*/$', dest):
+            raise Exception("Expect trailing '/' in %s" % dest)
+        if re.match('.*//$', dest):
+            raise Exception("Double trailing '/' in %s" % dest)
+        if not re.match('^http.*', src):
+            raise Exception("SRC %s is not a valid URI" % src)
+        if not re.match('^http.*', dest):
+            raise Exception("DEST %s is not a valid URI" % dest)
+
         self.src = src
         self.dest = dest
         self.mediaplaylists = []
@@ -125,6 +134,9 @@ def main():
     parser.add_argument('dest', metavar='DEST', help="URI where to push the HLS stream")
     args = parser.parse_args()
 
+    if not re.match('.*/$', args.dest):
+        # Expects trailing '/' in URI
+        args.dest += '/'
     relayer = HLSRelay(args.source, args.dest)
     relayer.start()
 
