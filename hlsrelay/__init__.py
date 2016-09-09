@@ -84,8 +84,9 @@ class HLSRelay:
         check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % masterpl_file, '%s%s' % (self.dest, 'master.m3u8')])
 
     def downloadAndRelay(self, playlist):
-        obj = m3u8.load(playlist['uri'])
-        playlist['m3u8'] = obj
+        if not playlist['m3u8']:
+            playlist['m3u8'] = m3u8.load(playlist['uri'])
+        obj = playlist['m3u8']
         print("Download and relay %s" % playlist['uri'])
         mediapl_file, headers = urllib.urlretrieve(playlist['uri'])
         for seg in obj.segments:
@@ -125,6 +126,9 @@ class HLSRelay:
                 mediaplaylist['uri'] = obj.base_uri + p.uri
                 mediaplaylist['filename'] = p.uri
                 mediaplaylist['ETag'] = ''
+            mediaplaylist['m3u8'] = m3u8.load(mediaplaylist['uri'])
+            if mediaplaylist['m3u8'].is_endlist:
+                raise Exception("VOD not supported")
             self.mediaplaylists.append(mediaplaylist)
         self.state = STATE_PARSED_MASTER
 
