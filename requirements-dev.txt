@@ -1,4 +1,5 @@
 -r requirements.txt
+bottle
 pytest
 pytest-cov
 python-coveralls
