@@ -1,3 +1,5 @@
+![Build status](https://travis-ci.org/Eyevinn/hls-relay.svg?branch=master)
+
 ## Description
 Script to pull HLS stream from one origin and push to another origin
 
