@@ -84,17 +84,25 @@ class HLSRelay:
         check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % masterpl_file, '%s%s' % (self.dest, 'master.m3u8')])
 
     def downloadAndRelay(self, playlist):
-        if not playlist['m3u8']:
-            playlist['m3u8'] = m3u8.load(playlist['uri'])
-        obj = playlist['m3u8']
         print("Download and relay %s" % playlist['uri'])
         mediapl_file, headers = urllib.urlretrieve(playlist['uri'])
-        for seg in obj.segments:
-            if not seg.uri in playlist['relayedsegments'].keys():
-                segment_file, headers = urllib.urlretrieve(playlist['base'] + seg.uri)
-                check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % segment_file, '%s%s' % (self.dest, seg.uri)])
-                playlist['relayedsegments'][seg.uri] = True
-                os.remove(segment_file)
+        mediapl_fp = open(mediapl_file, 'r')
+        mediapl_content = mediapl_fp.read(); 
+        obj = playlist['m3u8'] = m3u8.loads(mediapl_content)
+        segmentsremaining = True
+        while segmentsremaining:
+            for seg in obj.segments:
+                if not seg.uri in playlist['relayedsegments'].keys():
+                    segment_file, headers = urllib.urlretrieve(playlist['base'] + seg.uri)
+                    check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % segment_file, '%s%s' % (self.dest, seg.uri)])
+                    playlist['relayedsegments'][seg.uri] = True
+                    os.remove(segment_file)
+                    print("Uploading %s" % seg.uri)
+            segmentsremaining = False
+            for seg in obj.segments:
+                if not seg.uri in playlist['relayedsegments'].keys():
+                    segmentsremaining = True
+        print("All segments uploaded, uploading %s" % playlist['filename'])
         check_call(['curl', '-X', 'POST', '--data-binary', '@%s' % mediapl_file, '%s%s' % (self.dest, playlist['filename'])])
         os.remove(mediapl_file)
 
